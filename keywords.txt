@@ -1,0 +1,31 @@
+#######################################
+# Syntax Coloring Map PXP LIbrary
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+pxp		KEYWORD1
+tRotVal	KEYWORD1
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+begin					KEYWORD2
+SetStream				KEYWORD2
+Rotate					KEYWORD2
+Done					KEYWORD2
+StartNext				KEYWORD2
+SaveNext				KEYWORD2
+Show					KEYWORD2
+PrintNext				KEYWORD2
+SetScale				KEYWORD2
+SetPS					KEYWORD2
+SetOutput				KEYWORD2
+Start					KEYWORD2
+Stop					KEYWORD2
+# Constants (LITERAL1)
+#######################################
+ROT0		LITERAL1
+ROT90		LITERAL1
+ROT180		LITERAL1
+ROT270		LITERAL1
