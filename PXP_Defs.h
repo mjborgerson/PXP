@@ -1,3 +1,10 @@
+// header for definitions needed if core isn't update to latest TeensyDuino
+
+#ifndef  IMXRT_PXP
+#define IMXRT_PXP
+
+
+
 typedef struct
 {
     volatile uint32_t CTRL;
@@ -236,3 +243,5 @@ typedef struct
 #define PXP_COLOR(n)                        ((uint32_t)(((n) & 0xFFFFFF)))
 
 // 54.6: page 2990
+
+#endif // IMXRT_PXP

@@ -6,11 +6,14 @@
 # Datatypes (KEYWORD1)
 #######################################
 pxp		KEYWORD1
-tRotVal	KEYWORD1
+tRotVal		KEYWORD1
 #######################################
 # Methods and Functions (KEYWORD2)
 #######################################
 begin					KEYWORD2
+SetPS					KEYWORD2
+SetAS					KEYWORD2
+SetOutput				KEYWORD2
 SetStream				KEYWORD2
 Rotate					KEYWORD2
 Done					KEYWORD2
@@ -19,7 +22,10 @@ SaveNext				KEYWORD2
 Show					KEYWORD2
 PrintNext				KEYWORD2
 SetScale				KEYWORD2
+SetOVRAlpha				KEYWORD2
+SetFlip					KEYWORD2
 SetPS					KEYWORD2
+SetAS					KEYWORD2
 SetOutput				KEYWORD2
 Start					KEYWORD2
 Stop					KEYWORD2

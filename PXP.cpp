@@ -20,12 +20,21 @@ uint32_t PXPNext3[32];
 // instantiate one clPXP object
 clPXP  pxp;  
 
-
+// table of bytes per pixel for various output formats
+// used for automatic setting of pitch at setup
+const uint16_t bytesperpixel[32] = {
+	4,4,0,0,4,3,0,0,
+	2, 2,2,2,2,2,2,0,
+	4,0,2,2,1,1,0,0,
+	2,2,2,2,0,0,2,2
+};
   // Set the default output pointer to USB Serial
 Stream *pxpstrm = &Serial;
 
-void clPXP::begin(uint16_t *inbuff, uint16_t *outbuff, uint16_t inh, uint16_t inv,
-                        uint16_t outh, uint16_t outv){
+
+
+// simplified begin()--now you have to set up ps, as, and output surfaces separately
+void clPXP::begin(void){
   // turn on the PXP Clock
   CCM_CCGR2 |= CCM_CCGR2_PXP(CCM_CCGR_ON);
 
@@ -33,57 +42,73 @@ void clPXP::begin(uint16_t *inbuff, uint16_t *outbuff, uint16_t inh, uint16_t in
   PXP_CTRL_CLR = PXP_CTRL_SFTRST | PXP_CTRL_CLKGATE; //Clear reset and gate
   delay(10);
 
-  PXP_CTRL_SET = PXP_CTRL_ROTATE(0) | PXP_CTRL_BLOCK_SIZE;  // Set Rotation 0 block size 16x16
-
-  PXP_CSC1_COEF0 |= PXP_COEF0_BYPASS; 
-
-  PXP_OUT_CTRL_SET = PXP_RGB565;  // specify RGB565 output
-  PXP_OUT_BUF = (volatile void *)outbuff;
-  PXP_OUT_PITCH = outh * 2; // Same as width * 2
-  PXP_OUT_LRC = 0;
-  PXP_OUT_LRC = (outh << 16 | outv);
-
-  PXP_OUT_AS_ULC = 0xFFFFFFFF;  // not using the alpha surface
-  PXP_OUT_AS_LRC = 0;
-
-  PXP_OUT_PS_ULC = 0;  // start processing at upper left 0,0
-  PXP_OUT_PS_LRC = ((outh) << 16) | (outv); // same as output
-
-  PXP_PS_CTRL_SET = PXP_RGB565;  // PS buffer format is RGB565
-  PXP_PS_BUF = (volatile void *)inbuff;
-  PXP_PS_UBUF = 0;  // not using YUV
-  PXP_PS_VBUF = 0;  // not using YUV
-  PXP_PS_BACKGROUND_0 = 0x80; // dark blue
-  PXP_PS_PITCH = inh*2; // input is width * 2 bytes 
-  PXP_PS_SCALE = 0x10001000; // 1:1 scaling (0x1.000)
-  PXP_PS_CLRKEYLOW_0 = 0xFFFFFF;  // this disables color keying
-  PXP_PS_CLRKEYHIGH_0 = 0x0;  //  this disables color keying
-
+  PXP_CTRL_SET = PXP_CTRL_ROTATE(0);// | PXP_CTRL_BLOCK_SIZE;  // Set Rotation 0 block size 16x16
+  PXP_CSC1_COEF0 |= PXP_COEF0_BYPASS;   
   PXP_CTRL_SET = PXP_CTRL_IRQ_ENABLE;
   // we don't actually use the interrupt but need to enable the bits
   // in the PXP_STAT register
 }
 
-void clPXP::SetPS(	uint16_t *psbuff,uint16_t inh, uint16_t inv,  uint16_t cspace){
+uint16_t clPXP::BytesPerPixel(uint16_t mpt){
+	return bytesperpixel[mpt];
+}
+
+
+
+void clPXP::SetPS(	void *psbuff,uint16_t inh, uint16_t inv,  uint16_t maptype){
+	// first set the psmap elements
+//	psmap.pbits = psbuff;  psmap.width = inh; psmap.height = inv; psmap.maptype = maptype;
 	PXP_PS_CTRL_CLR = 0x1F;
-	PXP_PS_CTRL_SET = cspace;  // PS buffer format specification
+	PXP_PS_CTRL_SET = maptype;  // PS buffer format specification
 	PXP_PS_BUF = (volatile void *)psbuff;
 	PXP_PS_UBUF = 0;  // not using YUV planes
 	PXP_PS_VBUF = 0;  // not using YUV planes
 	PXP_PS_BACKGROUND_0 = 0x80; // dark blue
-	PXP_PS_PITCH = inh*2; // input is width * 2 bytes 
+	PXP_OUT_PS_ULC = 0;  // start processing at upper left 0,0
+	SetCorner(PXP_OUT_PS_LRC, (inh-1), (inv-1));
+
+	PXP_PS_PITCH = inh*bytesperpixel[maptype]; // input is width * format bytes per pixel
 	PXP_PS_SCALE = 0x10001000; // 1:1 scaling (0x1.000)
 	PXP_PS_CLRKEYLOW_0 = 0xFFFFFF;  // this disables color keying
 	PXP_PS_CLRKEYHIGH_0 = 0x0;  //  this disables color keying		
 }
+
+// Set up the Alpha Surface  for alpha override
+// PXP_AS_CTRL register doesn't have set and clr registers
+void clPXP::SetAS(	void *asbuff,uint16_t inh, uint16_t inv,  uint16_t maptype){
+	// first set the outmap elements
+//	asmap.pbits = asbuff;  asmap.width = inh; asmap.height = inv; asmap.maptype = maptype;
+	PXP_AS_CTRL = 0;
+	PXP_AS_CTRL |= PXP_AS_CTRL_ALPHA(255);  // use this instead of bitmap alpha byte
+	PXP_AS_CTRL |= PXP_AS_CTRL_ALPHA_CTRL(1);  // sets override mode 
+	PXP_AS_CTRL |= PXP_AS_CTRL_FORMAT(maptype);  
+	PXP_AS_BUF = (volatile void *)asbuff;
 	
-void clPXP::SetOutput(	uint16_t *outbuff, uint16_t outh, uint16_t outv,  uint16_t cspace){
-	PXP_OUT_CTRL_CLR = 0x1Fl;
-	PXP_OUT_CTRL_SET = cspace;  // specify  output color format
-	PXP_OUT_BUF = (volatile void *)outbuff;
-	PXP_OUT_PITCH = outh * 2; // assume Same as width * 2
-	PXP_OUT_LRC = (outh << 16 | outv);		
+	PXP_OUT_AS_ULC = 0;  // start processing at upper left 0,0
+	SetCorner(PXP_OUT_AS_LRC, (inh-1) , (inv-1));
+	PXP_AS_PITCH = inh*bytesperpixel[maptype]; // input is width * bytes per pixel
+	PXP_AS_CLRKEYLOW_0 = 0xFFFFFF;  // this disables color keying
+	PXP_AS_CLRKEYHIGH_0 = 0x0;  //  this disables color keying
+	
 }
+
+
+void clPXP::SetOutput(	void *outbuff, uint16_t outh, uint16_t outv,  uint16_t maptype){
+	// first set the outmap elements
+//	outmap.pbits = outbuff;  outmap.width = outh; outmap.height = outv; outmap.maptype = maptype;	
+	PXP_OUT_CTRL_CLR = 0x1Fl;
+	PXP_OUT_CTRL_SET = maptype;  // specify  output color format
+	PXP_OUT_BUF = (volatile void *)outbuff;
+	PXP_OUT_PITCH = outh * bytesperpixel[maptype]; // assume Same as width * bytesperpixel
+	//PXP_OUT_LRC = ((outh-1) << 16 | (outv-1));	
+	SetCorner(PXP_OUT_LRC, (outh-1) ,(outv-1));
+}
+
+void clPXP::SetOVRAlpha(uint8_t alpha){
+	PXP_AS_CTRL &= ~PXP_AS_CTRL_ALPHA(255); // zero out old value	
+	PXP_AS_CTRL |= PXP_AS_CTRL_ALPHA(alpha);  // use this instead of bitmap alpha byte	
+}
+
 
 // set both x and y scales to same value
 void clPXP::SetScale(float fscale){
@@ -105,7 +130,7 @@ void clPXP::Show(void) {
 
   pxpstrm->printf("OUT_PS_ULC:    %3u,%3u       OUT_PS_LRC:    %3u,%3u\n", PXP_OUT_PS_ULC>>16, PXP_OUT_PS_ULC&0xFFFF,
                                                                PXP_OUT_PS_LRC>>16, PXP_OUT_PS_LRC&0xFFFF);
-  pxpstrm->printf("OUT_AS_ULC:   %3u,%3u    OUT_AS_LRC:    %3u,%3u\n", PXP_OUT_AS_ULC>>16, PXP_OUT_AS_ULC&0xFFFF,
+  pxpstrm->printf("OUT_AS_ULC:    %3u,%3u       OUT_AS_LRC:    %3u,%3u\n", PXP_OUT_AS_ULC>>16, PXP_OUT_AS_ULC&0xFFFF,
                                                                PXP_OUT_AS_LRC>>16, PXP_OUT_AS_LRC&0xFFFF);
   pxpstrm->println();  // section separator
   pxpstrm->printf("PS_CTRL:      %08X       PS_BUF:       %08X\n", PXP_PS_CTRL,PXP_PS_BUF);
@@ -178,6 +203,17 @@ void clPXP::Rotate(tRotval rot) {
   while (!Done()) {};
   PXP_CTRL_CLR =  PXP_CTRL_ENABLE;  // stop the PXP
 }
+
+void clPXP::SetFlip(uint16_t flipval) {
+// Set HFLIP and VFLIP bits
+	PXP_CTRL_CLR =  PXP_CTRL_ENABLE;  // stop the PXP
+	if (flipval & 1) PXP_CTRL_SET = PXP_CTRL_VFLIP; else PXP_CTRL_CLR = PXP_CTRL_VFLIP;
+	if (flipval & 2) PXP_CTRL_SET = PXP_CTRL_HFLIP; else PXP_CTRL_CLR = PXP_CTRL_HFLIP;
+	SaveNext((uint32_t*)&PXPNext0);
+	PXP_STAT_CLR = PXP_STAT;  // clears all flags
+
+}
+
 
 // Restart PXP with settings from a PXP_Next array
 void clPXP::StartNext(uint32_t pxnptr[]) {
